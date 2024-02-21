@@ -34,6 +34,11 @@ class directory:
         self.dirty.update({blkAddr: 1})
         self.entries.update( {blkAddr: ( (1 == requestor), (0 == requestor) )} )
 
+#def dataAccess(CPU, blkAddr, dir):
+#    CPU.addBlock(blkAddr)
+#    dir.accessBlock(blkAddr, CPU.nr)
+#    CPU1.updateBlock(0) TODO In a foreach loop, issue this cmd for all CPUs that are set to one/True in the corresponding line in the directory.
+
 CPU0 = CPU(0)
 CPU1 = CPU(1)
 
