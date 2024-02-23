@@ -34,6 +34,17 @@ class directory:
         self.dirty.update({blkAddr: 1})
         self.entries.update( {blkAddr: ( (1 == requestor), (0 == requestor) )} )
 
+class status:
+    def __init__(self):
+        self.status = 'I'
+
+    def __init__(self, status):
+        self.status = status
+
+class message:
+    def __init__(self):
+        self.text = "[CC protocol] Test.\n"
+
 #def dataAccess(CPU, blkAddr, dir):
 #    CPU.addBlock(blkAddr)
 #    dir.accessBlock(blkAddr, CPU.nr)
@@ -48,28 +59,28 @@ dir = directory()
 CPU0.addBlock(0)
 dir.accessBlock(0, 0)
 CPU1.updateBlock(0) # Should not matter here, this could be called based on looking at the previous cmd, if it had CPU1 listed as containing blkAddr0, then call this.
-print(dir.entries)
+print(dir.dirty, dir.entries)
 print('\n')
 
 # 2) CPU1 WR 2
 CPU1.addBlock(2)
 dir.accessBlock(2, 1)
 CPU0.updateBlock(2) # Irrelevant like above, CPU 0 does not have blkAddr 2.
-print(dir.entries)
+print(dir.dirty, dir.entries)
 print('\n')
 
 # 3) CPU1 RD 1
 CPU1.addBlock(1)
 dir.accessBlock(1, 1)
 CPU0.updateBlock(1) # Still irrelevant like above, CPU 0 does not have blkAddr 1.
-print(dir.entries)
+print(dir.dirty, dir.entries)
 print('\n')
 
 # 4) CPU0 RD 1
 CPU0.addBlock(1)
 dir.accessBlock(1, 0)
 CPU1.updateBlock(1) # Now it is needed, since CPU1 had blkAddr 1 in 'M' state.
-print(dir.entries)
+print(dir.dirty, dir.entries)
 print('\n')
 
 # 5) CPU1 WR 1 TODO CPU1 already has blkAddr though in 'I' state. This would need to replace that, needs to be implemented in CPU logic.
