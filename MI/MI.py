@@ -4,21 +4,29 @@ class CPU:
         self.cacheEntries     = 0
         self.cacheEntryVal    = []
         self.cacheEntryStatus = []
-        self.cacheSize        = 2
+        self.cacheSize        = 999
 
     def addBlock(self, blkAddr):
-        # TODO Have to check for hit (blkAddr already in cache) before adding new item.
-        if self.cacheEntries < self.cacheSize:
-            self.cacheEntryVal.append(blkAddr)
-            self.cacheEntryStatus.append('M')
-            self.cacheEntries += 1
-        #else:
-            # TODO if cache is full, need a replacement.
-
-    def updateBlock(self, blkAddr):
+        # Check for hit (blkAddr already in cache) before adding new item.
+        present = 0
         for i in range( len(self.cacheEntryVal) ):
             if blkAddr == self.cacheEntryVal[i]:
-                self.cacheEntryStatus[i] = 'I'
+                present = 1
+                self.cacheEntryStatus[i].updateStatus('M')
+                break
+        if not present and self.cacheEntries < self.cacheSize:
+            self.cacheEntryVal.append(blkAddr)
+            self.cacheEntryStatus.append( status('M') )
+            self.cacheEntries += 1
+        elif self.cacheEntries >= self.cacheSize:
+            # TODO if cache is full, need a replacement.
+            print("Error: Cache should not fill up, assuming infinite size for this simulation.\n")
+
+    def updateBlock(self, blkAddr):
+        # Find the block to update.
+        for i in range( len(self.cacheEntryVal) ):
+            if blkAddr == self.cacheEntryVal[i]:
+                self.cacheEntryStatus[i].updateStatus('I')
 
     # These need to modify other CPUs and directory, so maybe not appropriate as CPU member fn.
     #def CPURead(self, blkAddr):
@@ -39,6 +47,9 @@ class status:
         self.status = 'I'
 
     def __init__(self, status):
+        self.status = status
+
+    def updateStatus(self, status):
         self.status = status
 
 class message:
@@ -84,4 +95,9 @@ print(dir.dirty, dir.entries)
 print('\n')
 
 # 5) CPU1 WR 1 TODO CPU1 already has blkAddr though in 'I' state. This would need to replace that, needs to be implemented in CPU logic.
+CPU1.addBlock(1)
+dir.accessBlock(1, 1)
+CPU0.updateBlock(1) # Now it is needed, since CPU0 had blkAddr 1 in 'M' state.
+print(dir.dirty, dir.entries)
+print('\n')
 
