@@ -38,9 +38,16 @@ class directory:
         self.entries = {}
         self.dirty   = {}
 
-    def accessBlock(self, blkAddr, requestor):
+    def accessBlock(self, blkAddr, requestor, nodes):
         self.dirty.update({blkAddr: 1})
-        self.entries.update( {blkAddr: ( (1 == requestor), (0 == requestor) )} )
+        arrayOfNodes = []
+        for i in range( len(nodes) ):
+            if requestor == i:
+                arrayOfNodes.append(1);
+            else:
+                arrayOfNodes.append(0);
+        self.entries.update( {blkAddr: arrayOfNodes} )
+        #self.entries.update( {blkAddr: ( (1 == requestor), (0 == requestor) )} )
 
 class status:
     def __init__(self):
@@ -56,48 +63,45 @@ class message:
     def __init__(self):
         self.text = "[CC protocol] Test.\n"
 
-#def dataAccess(CPU, blkAddr, dir):
-#    CPU.addBlock(blkAddr)
-#    dir.accessBlock(blkAddr, CPU.nr)
-#    CPU1.updateBlock(0) TODO In a foreach loop, issue this cmd for all CPUs that are set to one/True in the corresponding line in the directory.
+def dataAccess(nodes, CPUIdx, blkAddr, dir):
+    nodes[CPUIdx].addBlock(blkAddr)
+    dir.accessBlock(blkAddr, CPUIdx, nodes)
+    #CPU1.updateBlock(0)
+    # In a foreach loop, issue this cmd for all CPUs that are set to one/True in the corresponding line in the directory.
+    for i in range( len( dir.entries[blkAddr] ) ):
+        if 1 == dir.entries[blkAddr][i] and i != CPUIdx:
+            dir.entries[blkAddr][i] = 0
 
-CPU0 = CPU(0)
-CPU1 = CPU(1)
+
+# Instantiate nodes and directory.
+nodes = []
+nodes.append( CPU(0) )
+nodes.append( CPU(1) )
 
 dir = directory()
 
 # 1) CPU0 RD 0
-CPU0.addBlock(0)
-dir.accessBlock(0, 0)
-CPU1.updateBlock(0) # Should not matter here, this could be called based on looking at the previous cmd, if it had CPU1 listed as containing blkAddr0, then call this.
+dataAccess(nodes, 0, 0, dir)
 print(dir.dirty, dir.entries)
 print('\n')
 
 # 2) CPU1 WR 2
-CPU1.addBlock(2)
-dir.accessBlock(2, 1)
-CPU0.updateBlock(2) # Irrelevant like above, CPU 0 does not have blkAddr 2.
+dataAccess(nodes, 1, 2, dir)
 print(dir.dirty, dir.entries)
 print('\n')
 
 # 3) CPU1 RD 1
-CPU1.addBlock(1)
-dir.accessBlock(1, 1)
-CPU0.updateBlock(1) # Still irrelevant like above, CPU 0 does not have blkAddr 1.
+dataAccess(nodes, 1, 1, dir)
 print(dir.dirty, dir.entries)
 print('\n')
 
 # 4) CPU0 RD 1
-CPU0.addBlock(1)
-dir.accessBlock(1, 0)
-CPU1.updateBlock(1) # Now it is needed, since CPU1 had blkAddr 1 in 'M' state.
+dataAccess(nodes, 0, 1, dir)
 print(dir.dirty, dir.entries)
 print('\n')
 
 # 5) CPU1 WR 1 TODO CPU1 already has blkAddr though in 'I' state. This would need to replace that, needs to be implemented in CPU logic.
-CPU1.addBlock(1)
-dir.accessBlock(1, 1)
-CPU0.updateBlock(1) # Now it is needed, since CPU0 had blkAddr 1 in 'M' state.
+dataAccess(nodes, 1, 1, dir)
 print(dir.dirty, dir.entries)
 print('\n')
 
