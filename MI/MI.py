@@ -77,31 +77,31 @@ def dataAccess(nodes, CPUIdx, blkAddr, dir):
 nodes = []
 nodes.append( CPU(0) )
 nodes.append( CPU(1) )
+nodes.append( CPU(2) )
 
 dir = directory()
 
 # 1) CPU0 RD 0
 dataAccess(nodes, 0, 0, dir)
 print(dir.dirty, dir.entries)
-print('\n')
 
 # 2) CPU1 WR 2
 dataAccess(nodes, 1, 2, dir)
 print(dir.dirty, dir.entries)
-print('\n')
 
 # 3) CPU1 RD 1
 dataAccess(nodes, 1, 1, dir)
 print(dir.dirty, dir.entries)
-print('\n')
 
 # 4) CPU0 RD 1
 dataAccess(nodes, 0, 1, dir)
 print(dir.dirty, dir.entries)
-print('\n')
 
 # 5) CPU1 WR 1 TODO CPU1 already has blkAddr though in 'I' state. This would need to replace that, needs to be implemented in CPU logic.
 dataAccess(nodes, 1, 1, dir)
 print(dir.dirty, dir.entries)
-print('\n')
+
+# 6) CPU2 RD 1
+dataAccess(nodes, 2, 1, dir)
+print(dir.dirty, dir.entries)
 
