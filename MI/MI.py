@@ -70,7 +70,8 @@ def dataAccess(nodes, CPUIdx, blkAddr, dir):
     # In a foreach loop, issue this cmd for all CPUs that are set to one/True in the corresponding line in the directory.
     for i in range( len( dir.entries[blkAddr] ) ):
         if 1 == dir.entries[blkAddr][i] and i != CPUIdx:
-            dir.entries[blkAddr][i] = 0
+            nodes[i].updateBlock(blkAddr)
+            #dir.entries[blkAddr][i] = 0
 
 
 # Instantiate nodes and directory.
