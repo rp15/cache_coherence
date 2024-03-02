@@ -8,6 +8,21 @@ To run the directory-based MSI protocol, use
 To run the directory-based MESI protocol, use
 > python3.12 MESI/MESI.py
 
+######################
+####### Nodes ########
+######################
+New nodes can be instantiated by adding more elements to the node array.
+The identifier of the node is passed to the constructor.
+
+nodes = []
+nodes.append( CPU(0) )
+nodes.append( CPU(1) )
+nodes.append( CPU(2) )
+...
+
+######################
+#### Transactions ####
+######################
 To test new transactions in MI/MSI/MESI, add any number of these to the end of the file:
 
 # 6) CPU2 RD 1: dataAccess(nodes, [CPU node], [memory block address], dir, [RD: 1, WR: 0]).
