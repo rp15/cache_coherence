@@ -6,6 +6,7 @@ class CPU:
         self.cacheEntryStatus = []
         self.cacheSize        = 999
 
+    # When this node is accessing (rd or wr) a blk, call this fn to maintain the cache.
     def addBlock(self, blkAddr, rdNWr, dir):
         # Check for hit (blkAddr already in cache) before adding new item.
         present = 0
@@ -13,15 +14,35 @@ class CPU:
             if blkAddr == self.cacheEntryVal[i]:
                 present = 1
                 if 1 == rdNWr:
-                    # If no other node has this data, make it 'E,' otherwise 'S.' TODO
-                    self.cacheEntryStatus[i].updateStatus('S')
+                    # If any other node has this data, make it 'S,' otherwise 'E.'
+                    # In a foreach loop, go through the corresponding line in the directory.
+                    presentElsewhere = 0
+                    for i in range( len( dir.entries[blkAddr] ) ):
+                        if 1 == dir.entries[blkAddr][i] and i != self.nr:
+                            presentElsewhere = 1
+                            self.cacheEntryStatus[i].updateStatus('S')
+                            break
+                    if not presentElsewhere:
+                        self.cacheEntryStatus[i].updateStatus('E')
                 else: # Write.
                     self.cacheEntryStatus[i].updateStatus('M')
                 break
         if not present and self.cacheEntries < self.cacheSize:
             self.cacheEntryVal.append(blkAddr)
             if 1 == rdNWr:
-                self.cacheEntryStatus.append( status('S') )
+                # If any other node has this data, make it 'S,' otherwise 'E.'
+                # In a foreach loop, go through the corresponding line in the directory.
+                presentElsewhere = 0
+                if blkAddr in dir.entries.keys():
+                    for i in range( len( dir.entries[blkAddr] ) ):
+                        if 1 == dir.entries[blkAddr][i] and i != self.nr:
+                            presentElsewhere = 1
+                            self.cacheEntryStatus.append( status('S') )
+                            break
+                    if not presentElsewhere:
+                        self.cacheEntryStatus.append( status('E') )
+                else:
+                    self.cacheEntryStatus.append( status('E') )
             else: # Write.
                 self.cacheEntryStatus.append( status('M') )
             self.cacheEntries += 1
@@ -29,11 +50,14 @@ class CPU:
             # TODO if cache is full, need a replacement.
             print("Error: Cache should not fill up, assuming infinite size for this simulation.\n")
 
+    # When some other node is accessing a blk, call this fn to update other nodes' status.
     def updateBlock(self, blkAddr, rdNWr):
         # Find the block to update.
         for i in range( len(self.cacheEntryVal) ):
             if blkAddr == self.cacheEntryVal[i]:
                 if 1 == rdNWr:
+                    # TODO If I was 'I' when someone else read this blk, do I stay in 'I' or snoop it and go to 'S'?
+                    # TODO Update MI and MSI accordingly as well.
                     self.cacheEntryStatus[i].updateStatus('S')
                 else:
                     self.cacheEntryStatus[i].updateStatus('I')
@@ -54,7 +78,7 @@ class directory:
         else:
             self.dirty.update({blkAddr: 1})
         arrayOfNodes = []
-        # If it is a RD and the blkAddr is already in the directory, leave the entry as is and add the RDing node as S.
+        # If it is a RD and the blkAddr is already in the directory, leave the entry as is and add the RDing node as S/E.
         if 1 == rdNWr and blkAddr in self.entries.keys():
             self.entries[blkAddr][requestor] = 1
         # If it is a WR or a new blkAddr, only the accessing CPU will have the blkAddr in its cache.
@@ -81,7 +105,7 @@ class message:
         self.text = "[CC protocol] Test.\n"
 
 def dataAccess(nodes, CPUIdx, blkAddr, dir, rdNWr):
-    nodes[CPUIdx].addBlock(blkAddr, rdNWr)
+    nodes[CPUIdx].addBlock(blkAddr, rdNWr, dir)
     dir.accessBlock(blkAddr, CPUIdx, nodes, rdNWr)
     #CPU1.updateBlock(0)
     # In a foreach loop, issue this cmd for all CPUs that are set to one/True in the corresponding line in the directory.
