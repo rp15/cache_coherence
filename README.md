@@ -11,8 +11,10 @@ To run the directory-based MESI protocol, use
 
 For MI, the protobuf file can be compiled from the protobuf directory as
 > protoc -I=. --python_out=. ./transactions.proto
+
 Then, the transaction .txt file can be created with (still in protobuf/):
 > python3.12 transaction_gen.py
+
 (Transactions can be modified/added by changing transaction_gen.py.) 
 Finally, the resulting transactions_pb2.py and .txt files need to be copied to MI/.
 
