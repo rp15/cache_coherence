@@ -1,0 +1,15 @@
+syntax = "proto2";
+
+package transactions;
+
+message Transaction {
+  optional int32 nodeID = 1;
+  optional int32 blkAddr = 2;
+  optional int32 direction = 3;
+  optional int32 tick = 4;
+}
+
+message Transaction_list {
+  repeated Transaction transactions = 1;
+}
+
