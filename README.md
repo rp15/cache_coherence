@@ -1,12 +1,21 @@
 # cache_coherence
 To run the directory-based MI protocol, use 
-> python3.12 MI/MI.py
+> python3.12 MI/MI.py 3 MI/node0.txt MI/node1.txt MI/node2.txt
 
 To run the directory-based MSI protocol, use 
 > python3.12 MSI/MSI.py
 
 To run the directory-based MESI protocol, use
 > python3.12 MESI/MESI.py
+
+
+For MI, the protobuf file can be compiled from the protobuf directory as
+> protoc -I=. --python_out=. ./transactions.proto
+Then, the transaction .txt file can be created with (still in protobuf/):
+> python3.12 transaction_gen.py
+(Transactions can be modified/added by changing transaction_gen.py.) 
+Finally, the resulting transactions_pb2.py and .txt files need to be copied to MI/.
+
 
 ######################
 ####### Nodes ########
