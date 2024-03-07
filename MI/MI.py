@@ -6,6 +6,13 @@ if len(sys.argv) != int(sys.argv[1]) + 2:
   print("The specified nr of nodes does not match the number of provided tx files.")
   sys.exit(-1)
 
+tracker = []
+for i in range( int(sys.argv[1]) ):
+    tracker.append(0)
+
+MEMORY_RD = 4
+DATA_FWD  = 1
+
 class CPU:
     def __init__(self, nr):
         self.nr               = nr
@@ -14,18 +21,39 @@ class CPU:
         self.cacheEntryStatus = []
         self.cacheSize        = 999
 
-    def addBlock(self, blkAddr):
+    def addBlock(self, blkAddr, dir):
+        presentInOtherNode = 0
+        if blkAddr in dir.entries:
+            for i in range( len(dir.entries[blkAddr]) ):
+                if 1 == dir.entries[blkAddr][i] and i != self.nr:
+                    presentInOtherNode = 1
+                    break
         # Check for hit (blkAddr already in cache) before adding new item.
         present = 0
+        print(self.nr, self.cacheEntryVal, self.cacheEntryStatus, tracker)
         for i in range( len(self.cacheEntryVal) ):
             if blkAddr == self.cacheEntryVal[i]:
                 present = 1
+                if 'I' == self.cacheEntryStatus[i].status:
+                    if not presentInOtherNode:
+                        # Needs a memory access.
+                        tracker[self.nr] += MEMORY_RD
+                    else:
+                        tracker[self.nr] += DATA_FWD
+                elif 'M' == self.cacheEntryStatus[i].status:
+                    # Already has the data (and not in invalid state).
+                    tracker[self.nr] += 0
                 self.cacheEntryStatus[i].updateStatus('M')
                 break
         if not present and self.cacheEntries < self.cacheSize:
             self.cacheEntryVal.append(blkAddr)
             self.cacheEntryStatus.append( status('M') )
             self.cacheEntries += 1
+            if not presentInOtherNode:
+                # Needs a memory access.
+                tracker[self.nr] += MEMORY_RD
+            else:
+                tracker[self.nr] += DATA_FWD
         elif self.cacheEntries >= self.cacheSize:
             # TODO if cache is full, need a replacement.
             print("Error: Cache should not fill up, assuming infinite size for this simulation.\n")
@@ -72,12 +100,13 @@ class message:
         self.text = "[CC protocol] Test.\n"
 
 def dataAccess(nodes, CPUIdx, blkAddr, dir):
-    nodes[CPUIdx].addBlock(blkAddr)
+    nodes[CPUIdx].addBlock(blkAddr, dir)
     dir.accessBlock(blkAddr, CPUIdx, nodes)
-    #CPU1.updateBlock(0)
     # In a foreach loop, issue this cmd for all CPUs that are set to one/True in the corresponding line in the directory.
-    for i in range( len( dir.entries[blkAddr] ) ):
-        if 1 == dir.entries[blkAddr][i] and i != CPUIdx:
+    for i in range( len(nodes) ):
+        # dir.accessBlock already cleared the old status in the dir. But we know that for MI, everybody else goes 'I.'
+        #if 1 == dir.entries[blkAddr][i] and i != CPUIdx:
+        if i != CPUIdx:
             nodes[i].updateBlock(blkAddr)
             #dir.entries[blkAddr][i] = 0
 
@@ -142,4 +171,6 @@ for i in range(total_txs):
 # 6) CPU2 RD 1
 #dataAccess(nodes, 2, 1, dir)
 #print(dir.dirty, dir.entries)
+
+print(tracker)
 
