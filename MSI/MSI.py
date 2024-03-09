@@ -130,7 +130,6 @@ def dataAccess(nodes, CPUIdx, blkAddr, dir, rdNWr):
 
 # Instantiate nodes and directory.
 nodes = []
-nodes = []
 for i in range( int(sys.argv[1]) ):
     nodes.append( CPU(i) )
 
