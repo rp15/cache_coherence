@@ -8,6 +8,8 @@ To run the directory-based MSI protocol, use
 To run the directory-based MESI protocol, use
 > python3.12 MESI/MESI.py 3 MESI/node0.txt MESI/node1.txt MESI/node2.txt
 
+To run the scratchpad-based protocol (SP), use
+python3.12 SP/SP.py 3 SP/node0.txt SP/node1.txt SP/node2.txt
 
 The protobuf file can be compiled from the protobuf/ directory as
 > protoc -I=. --python_out=. ./transactions.proto
@@ -27,7 +29,7 @@ New nodes can be instantiated by changing the first argument of the protocol cal
 ######################
 #### Transactions ####
 ######################
-To test new transactions in MI/MSI/MESI, add any number of these to the transaction_gen.py file and rerun the txt generation.
+To test new transactions in MI/MSI/MESI/SP, add any number of these to the transaction_gen.py file and rerun the txt generation.
 
 (Currently, the dirty and present information of the directory is printed after every transaction. The simulations will be enhanced to track total number of cycles and mem write/read transactions to compare performance among different protocols.)
 
