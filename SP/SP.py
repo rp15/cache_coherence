@@ -1,17 +1,39 @@
 import sys
+import argparse
 import transactions_pb2
 
-if len(sys.argv) != int(sys.argv[1]) + 2:
-  print("Usage:", sys.argv[0], "TX_FILE0 TX_FILE1 ...")
-  print("The specified nr of nodes does not match the number of provided tx files.")
+parser = argparse.ArgumentParser(
+                    prog='SP',
+                    description='Scratchpad simulator.',
+                    epilog='RJ.')
+
+parser.add_argument('-n', '--node_count', required=True, type=int)
+parser.add_argument('-c', '--cache_line_size_bytes', default=32, type=int)
+
+parser.add_argument('-r', '--read_penalty', default=800, type=int)
+parser.add_argument('-f', '--forwarding_penalty', default=9, type=int)
+
+#parser.add_argument('-i', '--input_transaction_file', nargs='+')
+parser.add_argument('-i', '--input_transaction_file', required=True, action='append')
+
+args = parser.parse_args()
+
+node_count              = args.node_count
+cache_line_size_bytes   = args.cache_line_size_bytes
+input_transaction_files = args.input_transaction_file
+
+
+if len(input_transaction_files) != node_count:
+  print("The specified nr of nodes does not match the number of provided txn files.")
   sys.exit(-1)
 
+
 tracker = []
-for i in range( int(sys.argv[1]) ):
+for i in range(node_count):
     tracker.append(0)
 
-MEMORY_RD = 4
-DATA_FWD  = 1
+MEMORY_RD = args.read_penalty
+DATA_FWD  = args.forwarding_penalty
 
 class CPU:
     def __init__(self, nr):
@@ -50,22 +72,24 @@ class message:
         self.text = "[CC protocol] Test.\n"
 
 def dataAccess(nodes, CPUIdx, blkAddr):
-    nodes[CPUIdx].addBlock( blkAddr, nodes[ blkAddr % int(sys.argv[1]) ] )
+    # The blkAddr is stored in the node purely based on its address.
+    # For three nodes, Node0 stores addr 0, 3, 6, .., Node 1 stores addr 1, 4, 7, .., etc.
+    nodes[CPUIdx].addBlock( blkAddr, nodes[blkAddr % node_count] )
 
 
 # Instantiate nodes and directory.
 nodes = []
-for i in range( int(sys.argv[1]) ):
+for i in range(node_count):
     nodes.append( CPU(i) )
 
 
 txs = []
 total_txs = 0
 
-for i in range( int(sys.argv[1]) ):
+for i in range(node_count):
     txs.append( transactions_pb2.Transaction_list() )
 
-    with open(sys.argv[i + 2], "rb") as f:
+    with open(input_transaction_files[i], "rb") as f:
         txs[i].ParseFromString(f.read())
 
     total_txs += len(txs[i].transactions)
@@ -79,12 +103,17 @@ latest_tick = 0
 for i in range(total_txs):
     for j in range( len(txs) ):
         for tx in txs[j].transactions:
-            if tx.tick == i + 1:
-                dataAccess(nodes, tx.nodeID, tx.blkAddr)
+            if tx.tick == i:
+                dataAccess( nodes, tx.nodeID, int(tx.memAddr / cache_line_size_bytes) )
                 latest_tick = tx.tick
-                print(tx)
-                print(tracker)
-                print("\n")
+                print("Time tick (i.e., txn ID):    ", tx.tick,
+                    "\nNode ID:                     ", tx.nodeID,
+                    "\nTxn memory address:          ", tx.memAddr,
+                    "\nTxn block address:           ", int(tx.memAddr / cache_line_size_bytes),
+                    "\nTxn direction:               ", "RD" if tx.direction else "WR")
+                print("Current txn penalty per node:", tracker, "\n")
+
+#print(tracker)
 
 # 1) CPU0 RD 0
 #dataAccess(nodes, 0, 0, dir)
@@ -109,6 +138,4 @@ for i in range(total_txs):
 # 6) CPU2 RD 1
 #dataAccess(nodes, 2, 1, dir)
 #print(dir.dirty, dir.entries)
-
-print(tracker)
 
