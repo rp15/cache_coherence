@@ -1,17 +1,39 @@
 import sys
+import argparse
 import transactions_pb2
 
-if len(sys.argv) != int(sys.argv[1]) + 2:
-  print("Usage:", sys.argv[0], "TX_FILE0 TX_FILE1 ...")
-  print("The specified nr of nodes does not match the number of provided tx files.")
+parser = argparse.ArgumentParser(
+                    prog='MSI',
+                    description='MSI simulator.',
+                    epilog='RJ.')
+
+parser.add_argument('-n', '--node_count', required=True, type=int)
+parser.add_argument('-c', '--cache_line_size_bytes', default=32, type=int)
+
+parser.add_argument('-r', '--read_penalty', default=800, type=int)
+parser.add_argument('-f', '--forwarding_penalty', default=9, type=int)
+
+#parser.add_argument('-i', '--input_transaction_file', nargs='+')
+parser.add_argument('-i', '--input_transaction_file', required=True, action='append')
+
+args = parser.parse_args()
+
+node_count              = args.node_count
+cache_line_size_bytes   = args.cache_line_size_bytes
+input_transaction_files = args.input_transaction_file
+
+
+if len(input_transaction_files) != node_count:
+  print("The specified nr of nodes does not match the number of provided txn files.")
   sys.exit(-1)
 
+
 tracker = []
-for i in range( int(sys.argv[1]) ):
+for i in range(node_count):
     tracker.append(0)
 
-MEMORY_RD = 4
-DATA_FWD  = 1
+MEMORY_RD = args.read_penalty
+DATA_FWD  = args.forwarding_penalty
 
 class CPU:
     def __init__(self, nr):
@@ -130,7 +152,7 @@ def dataAccess(nodes, CPUIdx, blkAddr, dir, rdNWr):
 
 # Instantiate nodes and directory.
 nodes = []
-for i in range( int(sys.argv[1]) ):
+for i in range(node_count):
     nodes.append( CPU(i) )
 
 #nodes.append( CPU(0) )
@@ -142,10 +164,10 @@ dir = directory()
 txs = []
 total_txs = 0
 
-for i in range( int(sys.argv[1]) ):
+for i in range(node_count):
     txs.append( transactions_pb2.Transaction_list() )
 
-    with open(sys.argv[i + 2], "rb") as f:
+    with open(input_transaction_files[i], "rb") as f:
         txs[i].ParseFromString(f.read())
 
     total_txs += len(txs[i].transactions)
@@ -159,11 +181,16 @@ latest_tick = 0
 for i in range(total_txs):
     for j in range( len(txs) ):
         for tx in txs[j].transactions:
-            if tx.tick == i + 1:
-                dataAccess(nodes, tx.nodeID, tx.blkAddr, dir, tx.direction)
+            if tx.tick == i:
+                dataAccess( nodes, tx.nodeID, int(tx.memAddr / cache_line_size_bytes), dir, tx.direction )
                 latest_tick = tx.tick
-                print(tx)
-                print(dir.dirty, dir.entries)
+                print("Time tick (i.e., txn ID):    ", tx.tick,
+                    "\nNode ID:                     ", tx.nodeID,
+                    "\nTxn memory address:          ", tx.memAddr,
+                    "\nTxn block address:           ", int(tx.memAddr / cache_line_size_bytes),
+                    "\nTxn direction:               ", "RD" if tx.direction else "WR")
+                print("Directory dirty, entries:    ", dir.dirty, dir.entries)
+                print("Current txn penalty per node:", tracker, "\n")
 
 
 # 1) CPU0 RD 0
@@ -190,5 +217,5 @@ for i in range(total_txs):
 #dataAccess(nodes, 2, 1, dir, 1)
 #print(dir.dirty, dir.entries)
 
-print(tracker)
+#print(tracker)
 
