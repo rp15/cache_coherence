@@ -3,9 +3,11 @@ syntax = "proto2";
 package transactions;
 
 message Transaction {
+  // ID of the node (tile, CGRA, CPU, etc.).
   optional int32 nodeID = 1;
-  optional int32 blkAddr = 2;
-  // 1 == RD, 0 == WR
+  // Memory address. This will get translated to block address in the simulators.
+  optional int32 memAddr = 2;
+  // Transaction direction. 1 == RD, 0 == WR.
   optional int32 direction = 3;
   // Timestamp of the transaction.
   optional int32 tick = 4;
