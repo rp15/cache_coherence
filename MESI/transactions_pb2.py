@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12transactions.proto\x12\x0ctransactions\"O\n\x0bTransaction\x12\x0e\n\x06nodeID\x18\x01 \x01(\x05\x12\x0f\n\x07\x62lkAddr\x18\x02 \x01(\x05\x12\x11\n\tdirection\x18\x03 \x01(\x05\x12\x0c\n\x04tick\x18\x04 \x01(\x05\"C\n\x10Transaction_list\x12/\n\x0ctransactions\x18\x01 \x03(\x0b\x32\x19.transactions.Transaction')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12transactions.proto\x12\x0ctransactions\"O\n\x0bTransaction\x12\x0e\n\x06nodeID\x18\x01 \x01(\x05\x12\x0f\n\x07memAddr\x18\x02 \x01(\x05\x12\x11\n\tdirection\x18\x03 \x01(\x05\x12\x0c\n\x04tick\x18\x04 \x01(\x05\"C\n\x10Transaction_list\x12/\n\x0ctransactions\x18\x01 \x03(\x0b\x32\x19.transactions.Transaction')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
