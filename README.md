@@ -1,15 +1,21 @@
 # cache_coherence
+To get help with the simulators, run
+> python3.12 MI/MI.py -h
+> python3.12 MSI/MSI.py -h
+> python3.12 MESI/MESI.py -h
+> python3.12 SP/SP.py -h
+
 To run the directory-based MI protocol, use 
-> python3.12 MI/MI.py 3 MI/node0.txt MI/node1.txt MI/node2.txt
+> python3.12 MI/MI.py -n 3 -c 1 -r 4 -f 1 -i MI/node0.txt -i MI/node1.txt -i MI/node2.txt
 
 To run the directory-based MSI protocol, use 
-> python3.12 MSI/MSI.py 3 MSI/node0.txt MSI/node1.txt MSI/node2.txt
+> python3.12 MSI/MSI.py -n 3 -c 1 -r 4 -f 1 -i MSI/node0.txt -i MSI/node1.txt -i MSI/node2.txt
 
 To run the directory-based MESI protocol, use
-> python3.12 MESI/MESI.py 3 MESI/node0.txt MESI/node1.txt MESI/node2.txt
+> python3.12 MESI/MESI.py -n 3 -c 1 -r 4 -f 1 -i MESI/node0.txt -i MESI/node1.txt -i MESI/node2.txt
 
 To run the scratchpad-based protocol (SP), use
-python3.12 SP/SP.py 3 SP/node0.txt SP/node1.txt SP/node2.txt
+> python3.12 SP/SP.py -n 3 -c 2 -r 300 -f 4 -i SP/node0.txt -i SP/node1.txt -i SP/node2.txt
 
 The protobuf file can be compiled from the protobuf/ directory as
 > protoc -I=. --python_out=. ./transactions.proto
@@ -31,5 +37,5 @@ New nodes can be instantiated by changing the first argument of the protocol cal
 ######################
 To test new transactions in MI/MSI/MESI/SP, add any number of these to the transaction_gen.py file and rerun the txt generation.
 
-(Currently, the dirty and present information of the directory is printed after every transaction. The simulations will be enhanced to track total number of cycles and mem write/read transactions to compare performance among different protocols.)
+(Currently, the dirty and present information of the directory and total number of penalty cycles per node to compare performance among different protocols are printed after every transaction. The simulations could be enhanced to track mem write/read transactions.)
 
