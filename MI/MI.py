@@ -148,11 +148,14 @@ txs = []
 total_txs = 0
 
 for i in range(node_count):
+    # Add an empty txn list to the array for every node.
     txs.append( transactions_pb2.Transaction_list() )
 
+    # Populate the txn list from the node's txn-list txt file.
     with open(input_transaction_files[i], "rb") as f:
         txs[i].ParseFromString(f.read())
 
+    # Increase the total nr of txns by the node's txn cnt.
     total_txs += len(txs[i].transactions)
     #print(txs[i])
 
@@ -160,21 +163,58 @@ for i in range(node_count):
 
 # TODO Go thru all txs and pick the next-highest-tick one.
 # TODO Currently assuming that ticks are uniquely incremented by one across all txs (1 .. total_txs).
-latest_tick = 0
-for i in range(total_txs):
-    for j in range( len(txs) ):
-        for tx in txs[j].transactions:
-            if tx.tick == i:
-                dataAccess( nodes, tx.nodeID, int(tx.memAddr / cache_line_size_bytes), dir )
-                latest_tick = tx.tick
-                print("Time tick (i.e., txn ID):    ", tx.tick,
-                    "\nNode ID:                     ", tx.nodeID,
-                    "\nTxn memory address:          ", tx.memAddr,
-                    "\nTxn block address:           ", int(tx.memAddr / cache_line_size_bytes),
-                    "\nTxn direction:               ", "RD" if tx.direction else "WR")
-                print("Directory dirty, entries:    ", dir.dirty, dir.entries)
-                print("Current txn penalty per node:", tracker, "\n")
+#latest_tick = 0
+#for i in range(total_txs):
+#    for j in range( len(txs) ):
+#        for tx in txs[j].transactions:
+#            if tx.tick == i:
+#                dataAccess( nodes, tx.nodeID, int(tx.memAddr / cache_line_size_bytes), dir )
+#                latest_tick = tx.tick
+#                print("Time tick (i.e., txn ID):    ", tx.tick,
+#                    "\nNode ID:                     ", tx.nodeID,
+#                    "\nTxn memory address:          ", tx.memAddr,
+#                    "\nTxn block address:           ", int(tx.memAddr / cache_line_size_bytes),
+#                    "\nTxn direction:               ", "RD" if tx.direction else "WR")
+#                print("Directory dirty, entries:    ", dir.dirty, dir.entries)
+#                print("Current txn penalty per node:", tracker, "\n")
 
+txn_executed = []
+hiest_tick = 0
+for j in range( len(txs) ):
+    txn_executed.append([])
+    for k in range( len(txs[j].transactions) ):
+        txn_executed[j].append(0)
+        if txs[j].transactions[k].tick > hiest_tick:
+            hiest_tick = txs[j].transactions[k].tick
+
+print(txn_executed)
+
+candidate_tick       = -1
+latest_executed_tick =  0
+
+for i in range(total_txs):
+    candidate_tick = hiest_tick
+    for j in range( len(txs) ):
+        for k in range( len(txs[j].transactions) ): # for tx in txs[j].transactions:
+            tx = txs[j].transactions[k]
+            if not txn_executed[j][k] and tx.tick >= latest_executed_tick and tx.tick <= candidate_tick:
+                candidate_tick         = tx.tick
+                nxt_txn_node           = j
+                nxt_txn_id_within_node = k
+
+    tx_current = txs[nxt_txn_node].transactions[nxt_txn_id_within_node]
+    dataAccess( nodes, tx_current.nodeID, int(tx_current.memAddr / cache_line_size_bytes), dir )
+    latest_executed_tick = tx_current.tick
+    txn_executed[nxt_txn_node][nxt_txn_id_within_node] = 1
+
+    print("Time tick (i.e., txn ID):    ", tx_current.tick,
+        "\nNode ID:                     ", tx_current.nodeID,
+        "\nTxn memory address:          ", tx_current.memAddr,
+        "\nTxn block address:           ", int(tx_current.memAddr / cache_line_size_bytes),
+        "\nTxn direction:               ", "RD" if tx_current.direction else "WR")
+    print("Directory dirty, entries:    ", dir.dirty, dir.entries)
+    print("Current txn penalty per node:", tracker, "\n")
+print(txn_executed)
 # 1) CPU0 RD 0
 #dataAccess(nodes, 0, 0, dir)
 #print(dir.dirty, dir.entries)
