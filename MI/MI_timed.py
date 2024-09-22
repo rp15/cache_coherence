@@ -2,6 +2,9 @@ import sys
 import argparse
 import transactions_pb2
 from queue import PriorityQueue
+from itertools import count
+
+# python3.12 MI/MI_timed.py -n 3 -c 1 -r 4 -f 1 -d 1 -i MI/node0.txt -i MI/node1.txt -i MI/node2.txt
 
 parser = argparse.ArgumentParser(
                     prog='MI',
@@ -151,9 +154,9 @@ class directory:
         arrayOfNodes = []
         for i in range( len(nodes) ):
             if requestor == i:
-                arrayOfNodes.append(1);
+                arrayOfNodes.append(1)
             else:
-                arrayOfNodes.append(0);
+                arrayOfNodes.append(0)
         self.entries.update( {blkAddr: arrayOfNodes} )
         if requestor == self.req_node[blkAddr]: # If the executed tx's node is the last one who was requesting this block (no future fwding), then clear that info.
             self.expected.update( {blkAddr: -1} ) # -1 (not a real time tick) means that the block is actually in the directory and no one is waiting for it.
@@ -266,62 +269,70 @@ globalQ = PriorityQueue()
 
 # Execute txns.
 while True:
+    unique = count()
+
     for i in range(node_count):
         if not nodeNQ[i].empty():
-            tmp_tx = nodeNQ[i].get()
-            globalQ.put( (tmp_tx.tick, tmp_tx) )
+            tmp_tx = nodeNQ[i].get()[1]
+            globalQ.put( (tmp_tx.tick, next(unique), tmp_tx) )
+            #globalQ.put( (tmp_tx[0], tmp_tx[1]) )
     if globalQ.empty():
         break # Done executing.
 
     # Run execution, putting back txn items in the individual queues if necessary.
     # We know at this point, it is not empty. Getting the earliest non-executed tx.
-    tx_to_test = globalQ.get()
+    tx_to_test = globalQ.get()[2]
 
     # Either execute it successfully or put it back in the respective individual queue with its new time tick.
     # Have to check if a) this tx needs a mem read or b) mem forward.
     ##########
     # RD REQ #
     ##########
-    if nodes[current_txn.nodeID].readRequired( int(current_txn.memAddr / cache_line_size_bytes), dir ):
+    if nodes[tx_to_test.nodeID].readRequired( int(tx_to_test.memAddr / cache_line_size_bytes), dir ):
         #####
         # 1 #
         #####
         # If another node is already doing a read (if tick is not smaller, otherwise would probably need a fwd).
         if int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] > tx_to_test.tick and tx_to_test.nodeID != dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
             # Put the tx back in its individual queue with the forwarded time tick.
-            nodeNQ[tx_to_test.nodeID].put( (dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + DATA_FWD, tx_to_test) )
+            tx_to_test.tick = dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + DATA_FWD
+            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
         #####
         # 2 # less than not going to happen. Equal can happen, meaning in the same cycle, the reading node will finish the read and we should be able to fwd.
         #####
         # If another node already finished a read/fwd and we still require a read instead of a fwd,
         # meaning the block got lost somehow (evicted?), plan the read.
         # This might not happen since the earlier node's actual read would've cleared the expected field.
-        else if int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] <= tx_to_test.tick and tx_to_test.nodeID != dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
-            nodeNQ[tx_to_test.nodeID].put( (current_txn.tick + DATA_FWD, tx_to_test) )
+        elif int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] <= tx_to_test.tick and tx_to_test.nodeID != dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
+            tx_to_test.tick += DATA_FWD
+            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
         #####
         # 3 #
         #####
         # Plan the read if the block is not recorded in the dir.
-        else if int(tx_to_test.memAddr / cache_line_size_bytes) not in dir.expected:
-            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick + MEMORY_READ, tx_to_test) )
+        elif int(tx_to_test.memAddr / cache_line_size_bytes) not in dir.expected:
+            tx_to_test.tick += MEMORY_RD
+            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
             #dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ] = tx_to_test.nodeID
             #dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] = tx_to_test.tick + MEMORY_READ
-            dir.expectBlock(int(tx_to_test.memAddr / cache_line_size_bytes), tx_to_test.nodeID, tx_to_test.tick + MEMORY_READ)
+            dir.expectBlock(int(tx_to_test.memAddr / cache_line_size_bytes), tx_to_test.nodeID, tx_to_test.tick)
         #####
         # 4 #
         #####
-        # If this node is reading the same block already, try this txn again when the read is complete
-        # (or 1 tick later to let the original read take effect, maybe a bug if there are other txns following right after as well).
-        else if int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] > tx_to_test.tick and tx_to_test.nodeID == dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
-            nodeNQ[tx_to_test.nodeID].put( (dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + 1, tx_to_test) )
+        # If this node is reading the same block already, try this txn again when the read is complete.
+        # (same sounds good if the unique ctr will guarantee that this subsequent tx is attempted after the one already in the queue: or 1 tick later to let the original read take effect, maybe a bug if there are other txns following right after as well).
+        elif int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] > tx_to_test.tick and tx_to_test.nodeID == dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
+            tx_to_test.tick = dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] #+ 1
+            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
         #####
         # 5 #
         #####
         # If this node has read the same block already but a read is required, meaning it lost it somehow
         # OR WE JUST CAME BACK TO ACTUALLY execute the read, which one? Execute/plan the read.
-        else if int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] <= tx_to_test.tick and tx_to_test.nodeID == dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
-            nodeNQ[tx_to_test.nodeID].put( (current_txn.tick + MEMORY_READ, tx_to_test) )
-            dir.expectBlock(int(tx_to_test.memAddr / cache_line_size_bytes), tx_to_test.nodeID, current_txn.tick + MEMORY_READ)
+        elif int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] <= tx_to_test.tick and tx_to_test.nodeID == dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
+            #tx_to_test.tick += MEMORY_RD
+            #nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+            #dir.expectBlock(int(tx_to_test.memAddr / cache_line_size_bytes), tx_to_test.nodeID, tx_to_test.tick)
             dataAccess( nodes, tx_to_test.nodeID, int(tx_to_test.memAddr / cache_line_size_bytes), dir )
 
     ###########
@@ -329,20 +340,21 @@ while True:
     ###########
     # Nothing fancy here just put back with expected + FWD_PENALTY?
     # TODO if it already passed the time tick where the read + FWD was supposed to be ready, we can actually do dataAccess()?
-    else if nodes[current_txn.nodeID].fwdRequired ( int(current_txn.memAddr / cache_line_size_bytes), dir ):
-        nodeNQ[tx_to_test.nodeID].put( (dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + DATA_FWD, tx_to_test) )
+    elif nodes[tx_to_test.nodeID].fwdRequired ( int(tx_to_test.memAddr / cache_line_size_bytes), dir ):
+        tx_to_test.tick = dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + DATA_FWD
+        nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
     # TODO, if nothing is required, execute it! Read or fwd should probably be required for something meaningful to happen?
 
     ##########
     # NO REQ #
     ##########
     else:
-       dataAccess( nodes, current_txn.nodeID, int(tx_current.memAddr / cache_line_size_bytes), dir )
+       dataAccess( nodes, tx_to_test.nodeID, int(tx_to_test.memAddr / cache_line_size_bytes), dir )
     
 
     # Empty the global queue back to the individual queues.
     while not globalQ.empty():
-        restore_tx = globalQ.get()
+        restore_tx = globalQ.get()[2]
         nodeNQ[restore_tx.nodeID].put( (restore_tx.tick, restore_tx) )
     
 
