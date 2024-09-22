@@ -1,4 +1,7 @@
 # cache_coherence
+To run the directory-based timed MI protocol, use
+> python3.12 MI/MI_timed.py -n 3 -c 1 -r 4 -f 1 -d 1 -i MI/node0.txt -i MI/node1.txt -i MI/node2.txt
+
 To get help with the simulators, run
 > python3.12 MI/MI.py -h
 > python3.12 MSI/MSI.py -h
