@@ -257,31 +257,36 @@ tx_list_to_execute   = {} # Key: time tick, Value: array of txns that can happen
 # Priority queues per node, ordered by tick.
 nodeNQ = []
 
+# Wrapper to avoid comparing txn objects.
+class TxnWrapper:
+    def __init__(self, priority, item):
+        self.priority = priority
+        self.item = item
+
+    def __lt__(self, other):
+        return self if self.priority < other.priority else other
+
 for i in range(node_count):
     nodeNQ.append( PriorityQueue() )
     for j in range( len(txs[i].transactions) ):
-        nodeNQ[i].put( (txs[i].transactions[j].tick, txs[i].transactions[j]) )
+        nodeNQ[i].put( TxnWrapper(txs[i].transactions[j].tick, txs[i].transactions[j]) )
 
 
 # Global priority queue holding the head of each per-node priority queue, ordered by tick.
 globalQ = PriorityQueue()
 
-
 # Execute txns.
 while True:
-    unique = count()
-
     for i in range(node_count):
         if not nodeNQ[i].empty():
-            tmp_tx = nodeNQ[i].get()[1]
-            globalQ.put( (tmp_tx.tick, next(unique), tmp_tx) )
-            #globalQ.put( (tmp_tx[0], tmp_tx[1]) )
+            tmp_tx = nodeNQ[i].get().item
+            globalQ.put( TxnWrapper(tmp_tx.tick, tmp_tx) )
     if globalQ.empty():
         break # Done executing.
 
     # Run execution, putting back txn items in the individual queues if necessary.
     # We know at this point, it is not empty. Getting the earliest non-executed tx.
-    tx_to_test = globalQ.get()[2]
+    tx_to_test = globalQ.get().item
 
     # Either execute it successfully or put it back in the respective individual queue with its new time tick.
     # Have to check if a) this tx needs a mem read or b) mem forward.
@@ -296,7 +301,7 @@ while True:
         if int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] > tx_to_test.tick and tx_to_test.nodeID != dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
             # Put the tx back in its individual queue with the forwarded time tick.
             tx_to_test.tick = dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + DATA_FWD
-            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+            nodeNQ[tx_to_test.nodeID].put( TxnWrapper(tx_to_test.tick, tx_to_test) )
         #####
         # 2 # less than not going to happen. Equal can happen, meaning in the same cycle, the reading node will finish the read and we should be able to fwd.
         #####
@@ -305,14 +310,14 @@ while True:
         # This might not happen since the earlier node's actual read would've cleared the expected field.
         elif int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] <= tx_to_test.tick and tx_to_test.nodeID != dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
             tx_to_test.tick += DATA_FWD
-            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+            nodeNQ[tx_to_test.nodeID].put( TxnWrapper(tx_to_test.tick, tx_to_test) )
         #####
         # 3 #
         #####
         # Plan the read if the block is not recorded in the dir.
         elif int(tx_to_test.memAddr / cache_line_size_bytes) not in dir.expected:
             tx_to_test.tick += MEMORY_RD
-            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+            nodeNQ[tx_to_test.nodeID].put( TxnWrapper(tx_to_test.tick, tx_to_test) )
             #dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ] = tx_to_test.nodeID
             #dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] = tx_to_test.tick + MEMORY_READ
             dir.expectBlock(int(tx_to_test.memAddr / cache_line_size_bytes), tx_to_test.nodeID, tx_to_test.tick)
@@ -323,7 +328,7 @@ while True:
         # (same sounds good if the unique ctr will guarantee that this subsequent tx is attempted after the one already in the queue: or 1 tick later to let the original read take effect, maybe a bug if there are other txns following right after as well).
         elif int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] > tx_to_test.tick and tx_to_test.nodeID == dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
             tx_to_test.tick = dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] #+ 1
-            nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+            nodeNQ[tx_to_test.nodeID].put( TxnWrapper(tx_to_test.tick, tx_to_test) )
         #####
         # 5 #
         #####
@@ -331,7 +336,7 @@ while True:
         # OR WE JUST CAME BACK TO ACTUALLY execute the read, which one? Execute/plan the read.
         elif int(tx_to_test.memAddr / cache_line_size_bytes) in dir.expected and dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] <= tx_to_test.tick and tx_to_test.nodeID == dir.req_node[ int(tx_to_test.memAddr / cache_line_size_bytes) ]:
             #tx_to_test.tick += MEMORY_RD
-            #nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+            #nodeNQ[tx_to_test.nodeID].put( TxnWrapper(tx_to_test.tick, tx_to_test) )
             #dir.expectBlock(int(tx_to_test.memAddr / cache_line_size_bytes), tx_to_test.nodeID, tx_to_test.tick)
             dataAccess( nodes, tx_to_test.nodeID, int(tx_to_test.memAddr / cache_line_size_bytes), dir )
 
@@ -342,7 +347,7 @@ while True:
     # TODO if it already passed the time tick where the read + FWD was supposed to be ready, we can actually do dataAccess()?
     elif nodes[tx_to_test.nodeID].fwdRequired ( int(tx_to_test.memAddr / cache_line_size_bytes), dir ):
         tx_to_test.tick = dir.expected[ int(tx_to_test.memAddr / cache_line_size_bytes) ] + DATA_FWD
-        nodeNQ[tx_to_test.nodeID].put( (tx_to_test.tick, tx_to_test) )
+        nodeNQ[tx_to_test.nodeID].put( TxnWrapper(tx_to_test.tick, tx_to_test) )
     # TODO, if nothing is required, execute it! Read or fwd should probably be required for something meaningful to happen?
 
     ##########
@@ -354,8 +359,8 @@ while True:
 
     # Empty the global queue back to the individual queues.
     while not globalQ.empty():
-        restore_tx = globalQ.get()[2]
-        nodeNQ[restore_tx.nodeID].put( (restore_tx.tick, restore_tx) )
+        restore_tx = globalQ.get().item
+        nodeNQ[restore_tx.nodeID].put( TxnWrapper(restore_tx.tick, restore_tx) )
     
 
 '''
